@@ -106,8 +106,7 @@ dct.GAPDHnew <- data.frame("Genotype" = ctData$Genotype,
 columnCompare <- which(!(colnames(ctData) %in% c("Sample", "Genotype",
                                                  "Gravity", "Sex")))
 for (j in columnCompare) {
-  dct.GAPDHnew[colnames(ctData)[j]] <-
-    ctData[[j]] - ctData[["GAPDH-new"]]
+  dct.GAPDHnew[colnames(ctData)[j]] <- ctData[[j]] - ctData[["GAPDH-new"]]
 }
 
 #delta-delta CT
@@ -116,7 +115,7 @@ ddct.GAPDHnew <- dct.GAPDHnew #start with a copy of delta-CT
 for (i in 1:nrow(ddct.GAPDHnew)) {
   for (j in 4:ncol(dct.GAPDHnew)) { #skip the "genotype", "gravity", "sex" col
     controlValue <- subset(dct.GAPDHnew,
-                           dct.GAPDHnew$Genotype == dct.GAPDHnew$Genotype[i]
+                           dct.GAPDHnew$Genotype == "TH/+"
                            & dct.GAPDHnew$Sex == dct.GAPDHnew$Sex[i]
                            & dct.GAPDHnew$Gravity == 1)[,j]
     ddct.GAPDHnew[i,j] <- dct.GAPDHnew[i,j] - controlValue
@@ -125,8 +124,16 @@ for (i in 1:nrow(ddct.GAPDHnew)) {
 }
 
 #make some plots!
-for (j in 4:ncol(ddct.GAPDHnew)) {
-  
+for (sex in c("F", "M")) {
+  for (j in 4:ncol(plotData)) {
+    plotData <- ddct.GAPDHnew[order(ddct.GAPDHnew$Sex, #get everything in order
+                                    ddct.GAPDHnew$Genotype,
+                                    ddct.GAPDHnew$Gravity),]
+    plotData <- plotData[plotData$Sex == sex,]
+    barplot(height = plotData[,j], names.arg = paste0(plotData$Genotype, " ",
+                                                      plotData$Gravity, "g"),
+            main = paste0(colnames(plotData)[j], ", Sex ", sex))
+  }
 }
 
 
