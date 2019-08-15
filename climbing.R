@@ -37,7 +37,9 @@ climbData$Genotype <- sapply(X = climbData$Genotype,
                                switch(x, "Blue" = "TH/SOD2", "Green" = "TH/+",
                                       "Orange" = "TH/+", "Pink" = "TH/SOD2")
                              })
-climbData$Group <- paste(climbData$Genotype, climbData$Sex, climbData$Gravity)
+climbData$Group <- paste(climbData$Genotype,
+                         #climbData$Sex,
+                         climbData$Gravity)
 
 #Data Analysis ----
 #*Daily Trends ----
@@ -66,6 +68,14 @@ plotVar <- as.data.frame(apply(X = dayVar[5:ncol(dayVar)],
                                  by(x, INDICES = dayVar$Group,
                                     FUN = mean, na.rm = TRUE)
                                }))
+plotAverages < rbind(plotAverages[1,],
+                     plotAverages[3,],
+                     plotAverages[2,],
+                     plotAverages[4,])
+plotErr <- rbind(sqrt(plotVar[1,])/sqrt(138), #TH/+ 1g total n
+                 sqrt(plotVar[3,])/sqrt(132), #TH/SOD2 1g total n
+                 sqrt(plotVar[2,])/sqrt(94), #TH/+ 3g total n
+                 sqrt(plotVar[4,])/sqrt(129)) #TH/SOD2 3g total n
 
 #Plot daily trends by group (incl. handy wrapper function)
 errorPlot <- function(x, y, stdev, col, rows = 1:nrow(y),
@@ -78,7 +88,7 @@ errorPlot <- function(x, y, stdev, col, rows = 1:nrow(y),
   arrowAng <- 90
   arrowLen <- 0.1
   i <- min(rows)
-  
+
   #Plot first set of data; lower, and upper error bars
   plot(x = x, y = y[i,], xlim = xlim, ylim = ylim, col = col[i],
        main = main, xlab = xlab, ylab = ylab, type = type)
@@ -86,7 +96,7 @@ errorPlot <- function(x, y, stdev, col, rows = 1:nrow(y),
          angle = arrowAng, length = arrowLen, col = col[i])
   arrows(x0 = x, y0 = as.numeric(y[i,]), y1 = as.numeric(y[i,] + stdev[i,]),
          angle = arrowAng, length = arrowLen, col = col[i])
-  
+
   #Add rest of data and error bars to plot
   for (i in rows[-1]) {
     points(x = x, y = y[i,], col = col[i], type = type)
@@ -95,60 +105,33 @@ errorPlot <- function(x, y, stdev, col, rows = 1:nrow(y),
     arrows(x0 = x, y0 = as.numeric(y[i,]), y1 = as.numeric(y[i,] + stdev[i,]),
            angle = arrowAng, length = arrowLen, col = col[i])
   }
-  
+
 }
 
-colorVec <- rainbow(nrow(plotAverages))
-fem <- c(1,2,5,6)
-mal <- c(3,4,7,8)
+colorVec <- rainbow(nrow(plotAverages), s = 0.5)
 
-errorPlot(x = 1:10, y = plotAverages, stdev = sqrt(plotVar),
-          col = colorVec, type = "l", rows = fem,
-          ylim = c(0, 1.1),
-          main = "Climbing Assay, Females",
+errorPlot(x = 1:10, y = plotAverages, stdev = 2*plotErr,
+          col = colorVec, type = "l",
+          ylim = c(0.4, 1.1),
+          main = "Climbing Assay",
           xlab = "Day", ylab = "Proportion Passed")
+legend(x = "bottomleft", legend = paste0(rownames(plotAverages), "g"),
+       fill = colorVec)
 
-legend(x = "bottomleft", legend = paste0(rownames(plotAverages)[fem], "g"),
-       fill = colorVec[fem])
+#*Barplots
+omar <- par("mar")
+#par(mar = c(6.9, omar[-1]))
 
-errorPlot(x = 1:10, y = plotAverages, stdev = sqrt(plotVar),
-          col = colorVec, type = "l", rows = mal,
-          ylim = c(0, 1.1),
-          main = "Climbing Assay, Males",
-          xlab = "Day", ylab = "Proportion Passed")
-legend(x = "bottomleft", legend = paste0(rownames(plotAverages)[mal], "g"),
-       fill = colorVec[mal])
-
-#*Weekly Trends ----
-weekAverages <- dayAverages[,c(1:4)] #start with same 4 label columns
-weekAverages["Days1to5"] <- apply(X = dayAverages[,c(5:9)],
-                                  MARGIN = 1, FUN = mean)
-weekAverages["Days6to10"] <- apply(X = dayAverages[,c(10:14)],
-                                   MARGIN = 1, FUN = mean)
-weekVar <- dayVar[,c(1:4)]
-weekVar["Days1to5"] <- apply(X = dayVar[,c(5:9)],
-                                  MARGIN = 1, FUN = mean)
-weekVar["Days6to10"] <- apply(X = dayVar[,c(10:14)],
-                                   MARGIN = 1, FUN = mean)
-
-plotAverages <- as.data.frame(apply(X = weekAverages[5:ncol(weekAverages)],
-                                    MARGIN = 2,
-                                    FUN = function(x) {
-                                      by(x, INDICES = weekAverages$Group,
-                                         FUN = mean, na.rm = TRUE)
-                                    }))
-plotVar <- as.data.frame(apply(X = weekVar[5:ncol(weekVar)],
-                               MARGIN = 2,
-                               FUN = function(x) {
-                                 by(x, INDICES = weekVar$Group,
-                                    FUN = mean, na.rm = TRUE)
-                               }))
-errorPlot(x = c(5,10), y = plotAverages, stdev = sqrt(plotVar), col = colorVec,
-          xlim = c(1,10), ylim = c(0, 1.1), rows = fem,
-          main = "Climbing Assay, Females, Pooled d1-5 and d6-10",
-          ylab = "Proportion Passed")
-legend(x = "bottomleft", legend = paste0(rownames(plotAverages)[fem], "g"),
-       fill = colorVec[fem])
+for (j in 1:ncol(plotAverages)) {
+  n1 <- barplot(height = plotAverages[,j],
+                names.arg = paste0(rownames(plotAverages), "g"),
+                #las = 2,
+                col = rainbow(4, s = 0.5), ylab = "Proportion Passed",
+                main = paste("Climbing Assay, Day", j), ylim = c(0,1))
+  arrows(x0 = n1, y0 = plotAverages[,j], angle = 90, length = 0.1,
+         y1 = plotAverages[,j] + 2*plotErr[,j])
+}
+par(mar = omar)
 
 
 

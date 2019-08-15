@@ -116,7 +116,7 @@ for (i in 1:nrow(ddct.GAPDHnew)) {
   for (j in 4:ncol(dct.GAPDHnew)) { #skip the "genotype", "gravity", "sex" col
     controlValue <- subset(dct.GAPDHnew,
                            dct.GAPDHnew$Genotype == "TH/+"
-                           & dct.GAPDHnew$Sex == dct.GAPDHnew$Sex[i]
+                           & dct.GAPDHnew$Sex == "F"
                            & dct.GAPDHnew$Gravity == 1)[,j]
     ddct.GAPDHnew[i,j] <- dct.GAPDHnew[i,j] - controlValue
     ddct.GAPDHnew[i,j] <- 2^(-ddct.GAPDHnew[i,j]) #convert to fold-change scale
@@ -124,18 +124,20 @@ for (i in 1:nrow(ddct.GAPDHnew)) {
 }
 
 #make some plots!
-for (sex in c("F", "M")) {
-  for (j in 4:ncol(plotData)) {
-    plotData <- ddct.GAPDHnew[order(ddct.GAPDHnew$Sex, #get everything in order
-                                    ddct.GAPDHnew$Genotype,
-                                    ddct.GAPDHnew$Gravity),]
-    plotData <- plotData[plotData$Sex == sex,]
-    barplot(height = plotData[,j], names.arg = paste0(plotData$Genotype, " ",
-                                                      plotData$Gravity, "g"),
-            main = paste0(colnames(plotData)[j], ", Sex ", sex))
-  }
+pdf(file = "qPCR.pdf", paper = "USr", width = 10, height = 7)
+omar <- par("mar")
+par(mar = c(7.6, omar[-1]))
+for (j in 4:ncol(ddct.GAPDHnew)) {
+  plotData <- ddct.GAPDHnew[order(ddct.GAPDHnew$Sex, #get everything in order
+                                  ddct.GAPDHnew$Genotype,
+                                  ddct.GAPDHnew$Gravity),]
+  barplot(height = plotData[,j], names.arg = paste0(plotData$Genotype, " ",
+                                                    plotData$Sex, " ",
+                                                    plotData$Gravity, "g"),
+          main = colnames(plotData)[j], las = 2)
 }
-
+par(mar = omar)
+dev.off()
 
 
 
