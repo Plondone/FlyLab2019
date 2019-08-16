@@ -150,7 +150,7 @@ for (i in 1:nrow(ddct.GAPDHnew)) {
                                     #"sex", and "subset" columns
     controlValue <- mean(subset(dct.GAPDHnew,
                                 dct.GAPDHnew$Genotype == "TH/+"
-                                & dct.GAPDHnew$Sex == "F"
+                                #& dct.GAPDHnew$Sex == "F"
                                 & dct.GAPDHnew$Gravity == 1)[,j],
                          na.rm = TRUE)
     ddct.GAPDHnew[i,j] <- dct.GAPDHnew[i,j] - controlValue
@@ -208,5 +208,24 @@ arrows(x0 = n, y0 = avgData$Average, y1 = (avgData$Average + 2*avgData$SEM),
 arrows(x0 = n, y0 = avgData$Average, y1 = (avgData$Average - 2*avgData$SEM),
        angle = 90, length = 0.1)
 legend("topright", legend = c("1g", "1.2g", "3g"), fill = rainbow(3, s=0.5))
-
 par(mar = omar)
+
+#Heatmaps ----
+directoryName <- paste(substr(directoryName,
+                              start = 1,
+                              stop = nchar(directoryName)-3))
+oxidative <- read.csv(file = paste0(directoryName, "Oxidative.csv"),
+                      row.names = 1)
+oxidative <- t(scale(as.matrix(oxidative)))
+rownames(oxidative) <- c(rownames(oxidative)[1:2], "DmDRP",
+                         rownames(oxidative)[4:7])
+require("lattice")
+print(levelplot(oxidative, xlab = "Oxidative Stress Genes", ylab = "",
+                col.regions = rev(heat.colors(200))))
+
+downstream <- read.csv(file = paste0(directoryName, "Downstream.csv"),
+                       row.names = 1)
+downstream <- t(scale(as.matrix(downstream)))
+print(levelplot(downstream, xlab = "Downstream Genes", ylab = "",
+                col.regions = rev(heat.colors(200))))
+      
