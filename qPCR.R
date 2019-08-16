@@ -21,46 +21,69 @@ for (i in 1:length(fileVec)) {
   rawData[[i]]$Sample[grep(pattern = "Nicole",
                            fixed = TRUE,
                            x = rawData[[i]]$Sample)] <- ""
+  #Water controls looked good, so let's get rid of them
+  rawData[[i]]$Sample[grep(pattern = "Water",
+                           fixed = TRUE,
+                           x = rawData[[i]]$Sample)] <- ""
+}
+
+#Get each gene separately; assume 1:48 are gene1 and 49:96 are gene2
+geneData <- list()
+for (i in 1:length(rawData)) {
+  geneData[[i]] <- rawData[[i]][c(1:48),c(1,3)] #col 1 = sample, col 3 = CT
+  geneData[[i + length(rawData)]] <- rawData[[i]][c(49:96),c(1,3)]
+  names(geneData)[i] <- rawData[[i]][1,2]
+  names(geneData)[i + length(rawData)] <- rawData[[i]][49,2]
+}
+
+#Label each sample with unique prep number, and maintain master list
+for (j in 1:length(geneData)) {
+  sampleFrame <- data.frame("Sample" = NULL, "No" = NULL)
+  masterSample <- c()
+  for (i in 1:nrow(geneData[[j]])) {
+    currentSample <- geneData[[j]]$Sample[i]
+    if (currentSample == "") {
+      #don't do anything to blank entries
+    } else if (currentSample %in% sampleFrame$Sample) { #if seen it before
+      n <- which(currentSample == sampleFrame$Sample)
+      sampleFrame$No[n] <- sampleFrame$No[n] + 1
+      geneData[[j]]$Sample[i] <- paste(currentSample,
+                                       sampleFrame$No[n])
+    } else { #if we haven't seen it before for this gene
+      sampleFrame <- rbind(sampleFrame, data.frame("Sample" = currentSample,
+                                                   "No" = 1))
+      geneData[[j]]$Sample[i] <- paste(currentSample, 1)
+    }
+    
+    #if we haven't seen it before for any genes
+    if (!(geneData[[j]]$Sample[i] %in% masterSample)) {
+      masterSample <- c(masterSample, geneData[[j]]$Sample[i])
+    }
+  }
 }
 
 #Data Format ----
-#How many different samples are we working with?
-sampleVec <- c()
-for (i in 1:length(fileVec)) {
-  sampleVec[i] <- length(unique(rawData[[i]]$Sample))
-}
-
-#What are the sample names?
-sampleNames <- unique(rawData[[which.max(sampleVec)]]$Sample)
-sampleNames <- sampleNames[sampleNames != ""] #ignore blank entries
-sampleNames <- sampleNames[sampleNames != "Water"] #ignore water control
+#What are the samples we're looking at?
+masterSample <- sort(masterSample[masterSample != ""]) #ignore blank entries
 
 #Format all data into one data.frame
-ctData <- data.frame(Sample = sort(sampleNames), stringsAsFactors = FALSE)
-for (i in 1:length(fileVec)) {
-  geneNames <- unique(rawData[[i]]$Gene)
-  for (j in 1:length(geneNames)) {
-    ctData[geneNames[j]] <- sapply(
-      X = sampleNames,
-      FUN = function(x) {
-        output <- mean(
-          rawData[[i]]$CT[rawData[[i]]$Sample == x
-                          & rawData[[i]]$Gene == geneNames[j]],
-          na.rm = TRUE)
-        if (!is.nan(output)) return(output) else return(NA)
-      }
-    )
+ctData <- data.frame(Sample = masterSample, stringsAsFactors = FALSE)
+for (j in 1:length(geneData)) {
+  ctData[names(geneData)[j]] <- rep(NA, times = length(masterSample))
+  for (i in 1:length(masterSample)) {
+    n <- geneData[[j]]$CT[geneData[[j]]$Sample == masterSample[i]]
+    if (length(n) == 1) ctData[i,j+1] <- n #add CT value if it exists
   }
 }
 
 #Parse Sample Names ----
 #Experimental vs Control Genotype
 ctData["Genotype"] <- ifelse(
-  test = grepl(pattern = "+",
+  test = grepl(pattern = "TH/+",
                x = ctData$Sample,
                fixed = TRUE),
   yes = "TH/+",
-  no = ifelse(test = grepl(pattern = "SOD2",
+  no = ifelse(test = grepl(pattern = "TH/SOD2",
                            x = ctData$Sample,
                            fixed = TRUE),
               yes = "TH/SOD2",
@@ -96,49 +119,94 @@ ctData["Sex"] <- ifelse(
               yes = "F",
               no = "")
 )
+#Subset - just grab the last character of sample name
+ctData["Subset"] <- sapply(X = ctData$Sample, FUN = function(x) {
+  return(as.numeric(substr(x = x, start = nchar(x), stop = nchar(x))))
+})
+
+#Error correction ----
+#Looking at the data, it's obvious that TH/SOD2 M 1.2g 1 is unreasonable
+ctData <- ctData[-c(13),]
 
 #delta-CT: 'GAPDH-new' ----
 dct.GAPDHnew <- data.frame("Genotype" = ctData$Genotype,
                            "Gravity" = ctData$Gravity,
-                           "Sex" = ctData$Sex)
+                           "Sex" = ctData$Sex,
+                           "Subset" = ctData$Subset)
 
 #which columns need compared to housekeeping gene?
 columnCompare <- which(!(colnames(ctData) %in% c("Sample", "Genotype",
-                                                 "Gravity", "Sex")))
+                                                 "Gravity", "Sex",
+                                                 "Subset", "Gapdh")))
 for (j in columnCompare) {
   dct.GAPDHnew[colnames(ctData)[j]] <- ctData[[j]] - ctData[["GAPDH-new"]]
 }
 
-#delta-delta CT
+#delta-delta CT ----
 ddct.GAPDHnew <- dct.GAPDHnew #start with a copy of delta-CT
 
 for (i in 1:nrow(ddct.GAPDHnew)) {
-  for (j in 4:ncol(dct.GAPDHnew)) { #skip the "genotype", "gravity", "sex" col
-    controlValue <- subset(dct.GAPDHnew,
-                           dct.GAPDHnew$Genotype == "TH/+"
-                           & dct.GAPDHnew$Sex == "F"
-                           & dct.GAPDHnew$Gravity == 1)[,j]
+  for (j in 5:ncol(dct.GAPDHnew)) { #skip the "genotype", "gravity",
+                                    #"sex", and "subset" columns
+    controlValue <- mean(subset(dct.GAPDHnew,
+                                dct.GAPDHnew$Genotype == "TH/+"
+                                & dct.GAPDHnew$Sex == "F"
+                                & dct.GAPDHnew$Gravity == 1)[,j],
+                         na.rm = TRUE)
     ddct.GAPDHnew[i,j] <- dct.GAPDHnew[i,j] - controlValue
     ddct.GAPDHnew[i,j] <- 2^(-ddct.GAPDHnew[i,j]) #convert to fold-change scale
   }
 }
 
-#make some plots!
+#quick overall plots
 pdf(file = "qPCR.pdf", paper = "USr", width = 10, height = 7)
 omar <- par("mar")
 par(mar = c(7.6, omar[-1]))
-for (j in 4:ncol(ddct.GAPDHnew)) {
+for (j in 5:ncol(ddct.GAPDHnew)) {
   plotData <- ddct.GAPDHnew[order(ddct.GAPDHnew$Sex, #get everything in order
                                   ddct.GAPDHnew$Genotype,
-                                  ddct.GAPDHnew$Gravity),]
+                                  ddct.GAPDHnew$Gravity,
+                                  ddct.GAPDHnew$Subset),]
   barplot(height = plotData[,j], names.arg = paste0(plotData$Genotype, " ",
                                                     plotData$Sex, " ",
-                                                    plotData$Gravity, "g"),
+                                                    plotData$Gravity, "g",
+                                                    " ", plotData$Subset),
           main = colnames(plotData)[j], las = 2)
 }
 par(mar = omar)
 dev.off()
 
+#Careful plots ----
+#SOD2
+newPlotData <- plotData[-c(33,42),]
+par(mar = c(7.2, omar[-1]))
+barplot(newPlotData$SOD2, names.arg = paste0(newPlotData$Genotype, " ",
+                                          newPlotData$Sex, " ",
+                                          newPlotData$Gravity, "g",
+                                          " ", newPlotData$Subset),
+        main = "SOD2", las = 2, ylab = "Relative mRNA Expression")
 
+newPlotData$Group <- paste(newPlotData$Genotype,
+                           newPlotData$Gravity
+                           #newPlotData$Sex
+                           )
+avgData <- data.frame("Sample" = NULL, "Average" = NULL, "SEM" = NULL)
+for (group in unique(newPlotData$Group)) {
+  currentSample <- newPlotData$SOD2[newPlotData$Group == group]
+  avgData <- rbind(avgData,
+                   data.frame("Sample" = group,
+                              "Average" = mean(currentSample,
+                                               na.rm = TRUE),
+                              "SEM" = sd(currentSample, na.rm = TRUE)/
+                                sqrt(length(currentSample))))
+}
+n <- barplot(avgData$Average, names.arg = avgData$Sample,
+             col = rainbow(3, s=0.5), main = "SOD2 Relative mRNA Expression",
+             las = 2, ylim = c(0,5))
+arrows(x0 = n, y0 = avgData$Average, y1 = (avgData$Average + 2*avgData$SEM),
+       angle = 90, length = 0.1)
+arrows(x0 = n, y0 = avgData$Average, y1 = (avgData$Average - 2*avgData$SEM),
+       angle = 90, length = 0.1)
+legend("topright", legend = c("1g", "1.2g", "3g"), fill = rainbow(3, s=0.5))
 
-
+par(mar = omar)
