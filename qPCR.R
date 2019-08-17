@@ -211,6 +211,8 @@ legend("topright", legend = c("1g", "1.2g", "3g"), fill = rainbow(3, s=0.5))
 par(mar = omar)
 
 #Heatmaps ----
+#Make a nice color palette
+greenramp <- colorRampPalette(colors = c("#E6FFF1", "#63D297", "#084D28"))
 directoryName <- paste(substr(directoryName,
                               start = 1,
                               stop = nchar(directoryName)-3))
@@ -221,11 +223,11 @@ rownames(oxidative) <- c(rownames(oxidative)[1:2], "DmDRP",
                          rownames(oxidative)[4:7])
 require("lattice")
 print(levelplot(oxidative, xlab = "Oxidative Stress Genes", ylab = "",
-                col.regions = rev(heat.colors(200))))
+                col.regions = greenramp))
 
 downstream <- read.csv(file = paste0(directoryName, "Downstream.csv"),
                        row.names = 1)
 downstream <- t(scale(as.matrix(downstream)))
 print(levelplot(downstream, xlab = "Downstream Genes", ylab = "",
-                col.regions = rev(heat.colors(200))))
+                col.regions = greenramp))
       
